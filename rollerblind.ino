@@ -91,7 +91,7 @@ void setup()
 
 void loop()
 {
-  if (WiFi.status() == 3)
+  if (WiFi.status() == WL_CONNECTED)
   {
     client.loop();
   
