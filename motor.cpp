@@ -5,6 +5,8 @@
 // Arduino Motor Shield implementation
 // DC motor + encoder
 // ************************************************************************************
+// Copyright (c) 2020 - Patrick Fial
+// ************************************************************************************
 
 // ************************************************************************************
 // Includes/Definitions
@@ -21,11 +23,21 @@
 
 Motor::Motor(int directionPin, int brakePin, int speedPin, int encoderInt)
   : dirPin(directionPin), brkPin(brakePin), spdPin(speedPin), opsMode(omStandby),
-    encInt(encoderInt), currentPos(0), targetPos(0), calState(csOff), calibratedSteps(1000)
+    encInt(encoderInt), currentPos(0), targetSteps(0), calState(csOff), calibratedSteps(0),
+    shouldStop(0), newCalibrationSteps(0)
 { 
   attachInterrupt(digitalPinToInterrupt(encInt), Motor::encoder, RISING, this);
   pinMode(dirPin, OUTPUT); //Initiates Motor Channel A pin
   pinMode(brkPin, OUTPUT); //Initiates Brake Channel A pin
+}
+
+// ************************************************************************************
+// encoder (static)
+// ************************************************************************************
+
+void Motor::encoder(Motor* mtr)
+{
+  mtr->runEncoder();
 }
 
 // ************************************************************************************
@@ -37,8 +49,8 @@ void Motor::moveForward(long int steps)
   if (!steps)
     return;
 
-  opsMode = omRunning;
-  targetPos = steps;
+  opsMode = omForward;
+  targetSteps = steps;
 
   digitalWrite(dirPin, HIGH);  // Establishes forward direction of Channel A
   digitalWrite(brkPin, LOW);   // Disengage the Brake for Channel A
@@ -51,11 +63,11 @@ void Motor::moveForward(long int steps)
 
 void Motor::moveBackward(long int steps)
 {
-  if (!steps && currentPos == 0)
+  if (!steps)
     return;
 
-  opsMode = omRunning;
-  targetPos = steps;
+  opsMode = omBackward;
+  targetSteps = steps;
 
   digitalWrite(dirPin, LOW);   // Establishes forward direction of Channel A
   digitalWrite(brkPin, LOW);   // Disengage the Brake for Channel A
@@ -69,18 +81,32 @@ void Motor::moveBackward(long int steps)
 void Motor::stop()
 {
   opsMode = omStandby;
-  
-  digitalWrite(brkPin, HIGH); //Eengage the Brake for Channel A
-  delay(100);
+  targetSteps = 0;
+
+  digitalWrite(brkPin, HIGH); //Engage the Brake for Channel A
+  analogWrite(spdPin, 0);    // motor speed to zero
+  delay(500);
+
+  if (calState == csRewind)
+  {
+    currentPos = calibratedSteps;
+    calState = csOff;
+  }
 }
 
 // ************************************************************************************
-// encoder
+// goto
 // ************************************************************************************
 
-void Motor::encoder(Motor* mtr)
+void Motor::goTo(double targetStepsitionPerc)
 {
-  mtr->runEncoder();
+  int target = targetStepsitionPerc <= 0.01 ? 0 : calibratedSteps * (targetStepsitionPerc/100);
+  int relativeSteps = currentPos - target;
+
+  if (relativeSteps > 0)
+    return moveBackward(relativeSteps);
+
+  return moveForward(abs(relativeSteps));
 }
 
 // ************************************************************************************
@@ -90,17 +116,22 @@ void Motor::encoder(Motor* mtr)
 void Motor::runEncoder()
 {
   if (opsMode == omStandby)
-  {
     return;
-  }
 
-  currentPos++;
+  if (opsMode == omBackward)
+    currentPos--;
+  else
+    currentPos++;
 
-  if (targetPos && currentPos >= targetPos)
+  if (opsMode == omStandby || calState == csRunning)
+    return;
+
+  targetSteps--;
+
+  if (targetSteps <= 0)
   {
-    stop();
-    currentPos = targetPos;
-    targetPos = 0;    
+    *shouldStop = true;
+    targetSteps = 0;
   }
 }
 
@@ -112,37 +143,24 @@ void Motor::calibrate()
 {
   if (calState == csOff)
   {
+    Serial.println("Starting calibration ...");
+    currentPos = 0;
+    calibratedSteps = 0;
     calState = csRunning;
-    moveForward();  
+
+    moveBackward();  
   }
   else
   {
-    calState = csOff;
+    Serial.println("Calibration done, going back ...");
+    
     stop();
-    calibratedSteps = currentPos;
-    moveBackward(calibratedSteps);
+
+    calState = csRewind;
+    calibratedSteps = abs(currentPos);
+    currentPos = 0;
+    *newCalibrationSteps = calibratedSteps;
+    
+    moveForward(calibratedSteps);
   }
-}
-
-// ************************************************************************************
-// goto
-// ************************************************************************************
-
-void Motor::goTo(double targetPositionPerc)
-{
-  Serial.print("Going to position ");
-  Serial.println(targetPositionPerc);
-
-  int targetStep = targetPositionPerc <= 0.001 ? 0 : calibratedSteps * (targetPositionPerc/100);
-
-  Serial.print("Going to step ");
-  Serial.println(targetStep);
-
-  if (!targetStep)
-    return moveForward(currentPos);
-
-  if (targetStep > currentPos)
-    return moveBackward(targetStep);
-
-  return moveForward(targetStep);
 }
