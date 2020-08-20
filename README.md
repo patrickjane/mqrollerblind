@@ -1,4 +1,4 @@
-# DYI Smart Rollerblind (IKEA Tupplur)
+# DIY Smart Rollerblind (IKEA Tupplur)
 
 This project builds a smart rollerblind which can be controller via MQTT. Configuration examples for the **Home Assistant** smart home platform are also provided. The base for the project is the IKEA Tupplur rollerblind.
 
@@ -107,7 +107,8 @@ Adjust the parameters for your needs. The topics in this file need to be configu
 18:38:03.812 -> [MQTT] Subscribing to topic: ha/rollerblind/bedroom/control ... done
 18:38:03.881 -> [MQTT] Subscribing to topic: ha/rollerblind/bedroom/calibrate ... done
 18:38:03.950 -> [MQTT] Subscribing to topic: ha/rollerblind/bedroom/position ... done
-18:38:04.019 -> [MQTT] Subscribing to topic: ha/rollerblind/bedroom/cfg ... done```
+18:38:04.019 -> [MQTT] Subscribing to topic: ha/rollerblind/bedroom/cfg ... done
+```
 
 8) The controller is now ready and can be used.
 
